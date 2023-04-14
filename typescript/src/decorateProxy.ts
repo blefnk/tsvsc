@@ -1,7 +1,7 @@
 import lodashGet from 'lodash.get'
 import { camelCase } from 'change-case'
 import _ from 'lodash'
-import { getCompletionsAtPosition, PrevCompletionMap, PrevCompletionsAdditionalData } from './completionsAtPosition'
+import { GetCompletionAtPositionReturnType, getCompletionsAtPosition, PrevCompletionMap, PrevCompletionsAdditionalData } from './completionsAtPosition'
 import { RequestOptionsTypes, TriggerCharacterCommand } from './ipcTypes'
 import { getNavTreeItems } from './getPatchedNavTree'
 import decorateCodeActions from './codeActions/decorateProxy'
@@ -127,7 +127,33 @@ export const decorateLanguageService = (
         // have no idea in which cases its possible, but we can't work without it
         if (!scriptSnapshot) return
         const compilerOptions = languageServiceHost.getCompilationSettings()
-        const result = getCompletionsAtPosition(fileName, position, options, c, languageService, scriptSnapshot, formatOptions, { scriptKind, compilerOptions })
+        let result: GetCompletionAtPositionReturnType | undefined
+        try {
+            result = getCompletionsAtPosition(fileName, position, options, c, languageService, scriptSnapshot, formatOptions, { scriptKind, compilerOptions })
+        } catch (err) {
+            result ??= {
+                completions: {
+                    isGlobalCompletion: true,
+                    isMemberCompletion: false,
+                    isNewIdentifierLocation: false,
+                    entries: [
+                        {
+                            name: '[Completions crashed]',
+                            kind: ts.ScriptElementKind.moduleElement,
+                            sortText: '!',
+                        },
+                    ],
+                },
+                prevCompletionsMap: {},
+                prevCompletionsAdittionalData: {
+                    completionsSymbolMap: new Map(),
+                    enableMethodCompletion: false,
+                },
+            }
+            setTimeout(() => {
+                throw err
+            })
+        }
         if (!result) return
         prevCompletionsMap = result.prevCompletionsMap
         prevCompletionsAdittionalData = result.prevCompletionsAdittionalData
